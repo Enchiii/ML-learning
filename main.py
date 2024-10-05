@@ -12,6 +12,7 @@ class Metrics:
         self.y_pred = y_pred
         self.y_true = y_true
         self.labels = labels
+
         if labels is None:
             self.labels = np.unique(self.y_true)
 
@@ -51,6 +52,7 @@ class Metrics:
             fn = np.sum((self.y_true != self.y_pred) & (self.y_true != label))
 
             matrix_by_class[label] = {"tp": tp, "fp": fp, "tn": tn, "fn": fn}
+
         return matrix_by_class
 
     def get_precision(self) -> (float, dict):
@@ -66,7 +68,7 @@ class Metrics:
     def get_recall(self) -> (float, dict):
         recall_by_class: dict[str, float] = {
             str(label): self._confusion_matrix_by_class[label]["tp"] / d
-            if (d := self._confusion_matrix_by_class[label]["tp"] + self._confusion_matrix_by_class[label]["fp"]) != 0
+            if (d := self._confusion_matrix_by_class[label]["tp"] + self._confusion_matrix_by_class[label]["fn"]) != 0
             else 0.0
             for label in self.labels
         }
@@ -83,8 +85,8 @@ class Metrics:
 
     def get_accuracy(self) -> (float, dict):
         accuracy_by_class: dict[str, float] = {
-            str(label): self._confusion_matrix_by_class[label]["tp"] / d
-            if (d := self._confusion_matrix_by_class[label]["tp"] + self._confusion_matrix_by_class[label]["fp"]) != 0
+            str(label): (self._confusion_matrix_by_class[label]["tp"] + self._confusion_matrix_by_class[label]["tn"]) / d
+            if (d := len(self.y_pred)) != 0
             else 0.0
             for label in self.labels
         }
