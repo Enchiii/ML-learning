@@ -1,11 +1,18 @@
-import random
-
 import numpy as np
 import pandas as pd
 
 
 class Metrics:
-    def __init__(self, y_true: np.ndarray, y_pred: np.ndarray, labels: np.ndarray | list = None):
+    count = 0
+
+    def __init__(self, name: str | None = None):
+        self.id = Metrics.count
+        Metrics.count += 1
+        self.name = name
+        if name is None:
+            self.name = f"Metrics_" + str(self.id)
+
+    def __call__(self, y_true: np.ndarray, y_pred: np.ndarray, labels: np.ndarray | list = None):
         if len(y_true) != len(y_pred):
             raise ValueError("y_true and y_pred must have same length")
 
@@ -23,14 +30,12 @@ class Metrics:
         self.f1: float
         self.f1_by_class: dict
         self.accuracy: float
-        # self.accuracy_by_class: dict
 
         self._confusion_matrix_by_class: dict = self._get_confusion_matrix_by_class()
 
         self.precision, self.precision_by_class = self.get_precision()
         self.recall, self.recall_by_class = self.get_recall()
         self.f1, self.f1_by_class = self.get_f1()
-        # self.accuracy, self.accuracy_by_class = self.get_accuracy()
         self.accuracy = self.get_accuracy()
 
     def confusion_matrix(self) -> np.ndarray:
@@ -52,7 +57,6 @@ class Metrics:
 
             matrix_by_class[label] = {"tp": tp, "fp": fp, "tn": tn, "fn": fn}
 
-        print(matrix_by_class)
         return matrix_by_class
 
     def get_precision(self) -> (float, dict):
@@ -90,15 +94,6 @@ class Metrics:
         return np.mean(np.array(list(f1_by_class.values()))), f1_by_class
 
     def get_accuracy(self) -> (float, dict):
-        # accuracy_by_class: dict[str, float] = {
-        #     label: (
-        #         self._confusion_matrix_by_class[label]["tp"] / d
-        #         if (d := self._confusion_matrix_by_class[label]["tp"] + self._confusion_matrix_by_class[label]["fp"]) != 0
-        #         else 0.0
-        #     )
-        #     for label in self.labels
-        # }
-        # return np.mean(np.array(list(accuracy_by_class.values()))), accuracy_by_class
         return np.sum(self.y_true == self.y_pred) / len(self.y_true)
 
     def get_metrics(self, verbose: int = 1) -> pd.DataFrame:
@@ -125,27 +120,7 @@ class Metrics:
             for label in self.labels:
                 print(f"{label}: {self.f1_by_class[label]}")
             print()
-            # print("accuracy by class")
-            # for label in self.labels:
-            #     print(f"{label}: {self.accuracy_by_class[label]}")
             print(f"accuracy: {self.accuracy}")
             print()
 
         return metrics_df
-
-
-if __name__ == "__main__":
-
-    label_num = 4
-    num_data = 100
-
-    y_true = np.array([random.randint(0, label_num - 1) for _ in range(num_data)])
-    y_pred = np.array([random.randint(0, label_num - 1) for _ in range(num_data)])
-
-    metrics = Metrics(y_true, y_pred)
-
-    print(metrics.confusion_matrix())
-    print("-" * 20)
-    metrics.get_metrics(verbose=1)
-    print("-" * 20)
-    metrics.get_metrics(verbose=2)
