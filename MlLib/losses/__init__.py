@@ -1,4 +1,5 @@
 import numpy as np
+import cupy as cp
 
 
 class Loss:
@@ -73,23 +74,6 @@ class MAE(Loss):
 
 
 # classification loss functions
-class BinaryCrossEntropy(Loss):
-    count = 0
-
-    def __init__(self, name=None):
-        super().__init__(name)
-        self.id = BinaryCrossEntropy.count
-        BinaryCrossEntropy.count += 1
-        self.name = name
-        self.type = "BinaryCrossEntropy"
-        if name is None:
-            self.name = f"{self.type}_" + str(self.id)
-
-    def __call__(self, y_true: np.ndarray | None = None, y_pred: np.ndarray | None = None, verbose: int = 0) -> float:
-        super().__call__(y_true, y_pred, verbose)
-        pass
-
-
 class CategoricalCrossEntropy(Loss):
     count = 0
 
@@ -102,9 +86,15 @@ class CategoricalCrossEntropy(Loss):
         if name is None:
             self.name = f"{self.type}_" + str(self.id)
 
-    def __call__(self, y_true: np.ndarray | None = None, y_pred: np.ndarray | None = None, verbose: int = 0) -> float:
+    def __call__(
+        self,
+        y_true: np.ndarray | cp.ndarray | None = None,
+        y_pred: np.ndarray | cp.ndarray | None = None,
+        verbose: int = 0,
+    ) -> float:
         super().__call__(y_true, y_pred, verbose)
-        pass
+        y_pred = cp.clip(y_pred, 1e-15, 1 - 1e-15)
+        return -cp.sum(y_true * cp.log(y_pred), axis=-1)
 
 
 class SparseCategoricalCrossEntropy(Loss):

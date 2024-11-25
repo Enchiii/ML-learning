@@ -1,20 +1,22 @@
-# %%
-import numpy as np
-
-from losses import MSE
-from models.regression import RidgeRegression
-
-
-# %%
-def get_y(x: np.ndarray | int | float, a: int | float = 1, b: int | float = 0):
-    return a * x + b
-
+from sklearn.datasets import make_moons
+from MlLib.layers import Dense, ReLU, Sigmoid
+from MlLib.losses import CategoricalCrossEntropy
+import cupy as cp
+from MlLib.RL.model import RLModel
 
 if __name__ == "__main__":
-    N: int = 10
-    x: np.ndarray = np.array([x for x in range(N)])
-    y: np.ndarray = np.array([get_y(x, 1, 0) for x in x])
+    X, y = make_moons(n_samples=1000, noise=0.2, random_state=42)
 
-    model: RidgeRegression = RidgeRegression(loss=MSE(), lr=0.01, alpha=-1.1)
+    X = cp.asarray(X)
+    y = cp.asarray(y)
 
-    model.fit(x, y, 100)
+    model = RLModel(
+        [
+            Dense(2, 16, activation=ReLU()),
+            Dense(16, 1, activation=Sigmoid()),
+        ],
+        loss=CategoricalCrossEntropy(),
+        learning_rate=0.01,
+    )
+
+    loss = model.fit(X, y, epochs=10, verbose=2)

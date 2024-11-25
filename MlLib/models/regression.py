@@ -2,7 +2,7 @@ import timeit
 
 import numpy as np
 
-from losses import Loss
+from MlLib.losses import Loss
 
 
 class LinearRegression:
