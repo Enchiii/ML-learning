@@ -86,6 +86,36 @@ class CategoricalCrossEntropy(Loss):
         if name is None:
             self.name = f"{self.type}_" + str(self.id)
 
+        self.dinputs: cp.ndarray | None = None
+
+    def __call__(
+        self,
+        y_true: cp.ndarray | None = None,
+        y_pred: cp.ndarray | None = None,
+        verbose: int = 0,
+    ):
+        super().__call__(y_true, y_pred, verbose)
+
+        return cp.mean(self.forward(y_true, y_pred))
+
+    # zastanaiam sie czy ten call moze psuc
+
+    def forward(self, y_true: cp.ndarray, y_pred: cp.ndarray) -> cp.ndarray:
+        y_pred_clipped = cp.clip(y_pred, 1e-7, 1 - 1e-7)
+        correct_confidences = cp.sum(y_pred_clipped * y_true, axis=1)
+        return -cp.log(correct_confidences)
+
+    def backward(self, y_true: cp.ndarray, dvalues: cp.ndarray) -> cp.ndarray:
+        samples = dvalues.shape[0]
+        self.dinputs = -y_true / dvalues
+        # Normalize gradient
+        self.dinputs = self.dinputs / samples
+        return self.dinputs
+
+
+
+
+class BinaryCrossEntropy(Loss):
     def __call__(
         self,
         y_true: np.ndarray | cp.ndarray | None = None,
@@ -94,7 +124,11 @@ class CategoricalCrossEntropy(Loss):
     ) -> float:
         super().__call__(y_true, y_pred, verbose)
         y_pred = cp.clip(y_pred, 1e-15, 1 - 1e-15)
-        return -cp.sum(y_true * cp.log(y_pred), axis=-1)
+        return -cp.mean(y_true * cp.log(y_pred) + (1 - y_true) * cp.log(1 - y_pred))
+
+    def backward(self, error, y_true):
+        samples = y_true.shape[0]
+        return (error - y_true) / samples
 
 
 class SparseCategoricalCrossEntropy(Loss):

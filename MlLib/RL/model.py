@@ -1,56 +1,65 @@
-import cupy as cp
-from MlLib.losses import Loss
-from timeit import default_timer as timer
+import torch
+import torch.nn as nn
+import torch.optim as optim
+import torch.nn.functional as F
+import os
 
 
-class RLModel:
-    def __init__(self, layers: list | tuple, loss: Loss, learning_rate: float = 0.001):
-        self.layers = layers
-        self.loss = loss
-        self.learning_rate = learning_rate
+class LinearQNet(nn.Module):
+    def __init__(self):
+        super().__init__()
+        self.linear1 = nn.Linear(11, 256)
+        self.linear2 = nn.Linear(256, 3)
 
-    def forward_propagation(self, x: cp.ndarray) -> cp.ndarray:
-        for layer in self.layers:
-            x = layer.forward(x)
+    def forward(self, x):
+        x = F.relu(self.linear1(x))
+        x = self.linear2(x)
         return x
 
-    def backward_propagation(self, loss) -> None:
-        for layer in reversed(self.layers):
-            loss = layer.backward(loss, self.learning_rate)
+    def save(self, file_name="model.pth"):
+        model_folder_path = "./model"
+        if not os.path.exists(model_folder_path):
+            os.makedirs(model_folder_path)
 
-    def fit(self, x: cp.ndarray, y: cp.ndarray, epochs: int, learning_rate: float = None, verbose: int = 1) -> float:
-        if not epochs or epochs < 1:
-            raise ValueError("Epoch number must be greater than or equal to 1.")
+        file_name = os.path.join(model_folder_path, file_name)
+        torch.save(self.state_dict(), file_name)
 
-        self.learning_rate = learning_rate if learning_rate else self.learning_rate
 
-        if not self.learning_rate or self.learning_rate < 0:
-            raise ValueError("Learning rate must be greater than 0.")
+class QTrainer:
+    def __init__(self, model, lr, gamma):
+        self.lr = lr
+        self.gamma = gamma
+        self.model = model
+        self.optimizer = optim.Adam(model.parameters(), lr=self.lr)
+        self.criterion = nn.MSELoss()
 
-        start = timer()
+    def train_step(self, state, action, reward, next_state, done):
+        state = torch.tensor(state, dtype=torch.float)
+        next_state = torch.tensor(next_state, dtype=torch.float)
+        action = torch.tensor(action, dtype=torch.long)
+        reward = torch.tensor(reward, dtype=torch.float)
+        # (n, x)
 
-        if verbose >= 1:
-            print(f"Starting training for {epochs} epochs...")
+        if len(state.shape) == 1:
+            # (1, x)
+            state = torch.unsqueeze(state, 0)
+            next_state = torch.unsqueeze(next_state, 0)
+            action = torch.unsqueeze(action, 0)
+            reward = torch.unsqueeze(reward, 0)
+            done = (done,)
 
-        for epoch in range(epochs):
-            y_pred = self.forward_propagation(x)
-            loss = self.loss(y, y_pred)
-            self.backward_propagation(loss)
+        # 1: predicted Q values with current state
+        pred = self.model(state)
 
-            avg_loss = loss.mean()
-            if verbose == 1:
-                if epoch % (epochs // 10):  # TODO: this doesn't pront anything
-                    print(f"Epoch {epoch+1}/{epochs} {(epoch+1)/epochs * 100}%\tLoss: {avg_loss:.7f}")
-            elif verbose > 1:
-                print(f"Epoch {epoch+1}/{epochs} {(epoch+1)/epochs * 100}%\tLoss: {avg_loss:.7}")
+        target = pred.clone()
+        for idx in range(len(done)):
+            Q_new = reward[idx]
+            if not done[idx]:
+                Q_new = reward[idx] + self.gamma * torch.max(self.model(next_state[idx]))
 
-        loss = self.loss(y, y_pred)
-        avg_loss = loss.mean()
-        end = timer()
+            target[idx][torch.argmax(action[idx]).item()] = Q_new
 
-        if verbose >= 1:
-            print("\n------------------------------------------------\n")
-            print(f"Finished training if {end - start:.5f} seconds")
-            print(f"Average loss: {avg_loss:.7f}\n")
-
-        return avg_loss
+        self.optimizer.zero_grad()
+        loss = self.criterion(target, pred)
+        loss.backward()
+        self.optimizer.step()

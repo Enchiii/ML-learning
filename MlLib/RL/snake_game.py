@@ -1,7 +1,8 @@
 import random
-from collections import namedtuple
+from collections import namedtuple, deque
 from enum import Enum
 
+import numpy as np
 import pygame
 
 
@@ -22,7 +23,7 @@ class SnakeGame:
     BLUE2 = (0, 100, 255)
     BLACK = (0, 0, 0)
 
-    SPEED = 20
+    SPEED = 100
 
     BLOCK_SIZE = 20
 
@@ -35,12 +36,16 @@ class SnakeGame:
         self.font = font
 
         self.direction = SnakeGame.Direction.RIGHT
-        self.head = SnakeGame.Point(self.w // 2, self.h // 2)
+        self.head = SnakeGame.Point(
+            (self.w // 2) // SnakeGame.BLOCK_SIZE * SnakeGame.BLOCK_SIZE,
+            (self.h // 2) // SnakeGame.BLOCK_SIZE * SnakeGame.BLOCK_SIZE,
+        )
         self.snake = [
             self.head,
             SnakeGame.Point(self.head.x - SnakeGame.BLOCK_SIZE, self.head.y),
             SnakeGame.Point(self.head.x - (2 * SnakeGame.BLOCK_SIZE), self.head.y),
         ]
+        self.frame_iteration = 0
         self.score = 0
         self.food = None
         self._place_food()
@@ -53,9 +58,12 @@ class SnakeGame:
             SnakeGame.Point(self.head.x - SnakeGame.BLOCK_SIZE, self.head.y),
             SnakeGame.Point(self.head.x - (2 * SnakeGame.BLOCK_SIZE), self.head.y),
         ]
+        self.frame_iteration = 0
         self.score = 0
         self.food = None
         self._place_food()
+        self.move_history_len = self.w // SnakeGame.BLOCK_SIZE if self.w > self.h else self.h // SnakeGame.BLOCK_SIZE
+        self.move_history = deque(maxlen=self.move_history_len)
 
     def _place_food(self):
         x = random.randint(0, (self.w - SnakeGame.BLOCK_SIZE) // SnakeGame.BLOCK_SIZE) * SnakeGame.BLOCK_SIZE
@@ -65,17 +73,8 @@ class SnakeGame:
             self._place_food()
 
     def play_step(self, action):
-        """
-        move: one hot encode:
-        [1, 0, 0] -> no change
-        [0, 1, 0] -> turn left
-        [0, 0, 1] -> turn right
-
-        self.direction -> 1
-        if [0, 1, 0] -> self.direction - 1 % len(self.direction)
-        elif [0, 1, 0] -> -> self.direction + 1 % len(self.direction)
-        """
-        reward = 0
+        self.frame_iteration += 1
+        reward = -1
         game_over = False
 
         # 1. collect user input
@@ -84,34 +83,36 @@ class SnakeGame:
                 pygame.quit()
                 quit()
 
-            if action == [1, 0, 0]:
-                self.direction = self.direction
-            elif action == [0, 1, 0]:
-                self.direction = self.direction - 1 % len(self.direction)
-            elif action == [0, 0, 1]:
-                self.direction = self.direction + 1 % len(self.direction)
+        clock_wise = [
+            SnakeGame.Direction.RIGHT,
+            SnakeGame.Direction.DOWN,
+            SnakeGame.Direction.LEFT,
+            SnakeGame.Direction.UP,
+        ]
+        idx = clock_wise.index(self.direction)
 
-        old_head = self.head
-        old_distance = ((old_head.x - self.food.x) ** 2 + (old_head.y - self.food.y) ** 2) ** 0.5
+        if action == [1, 0, 0]:
+            self.direction = clock_wise[idx]
+        elif action == [0, 1, 0]:
+            self.direction = clock_wise[(idx + 1) % 4]
+        elif action == [0, 0, 1]:
+            self.direction = clock_wise[(idx - 1) % 4]
 
         # 2. move
         self._move(self.direction)  # update the head
         self.snake.insert(0, self.head)
 
-        new_distance = ((self.head.x - self.food.x) ** 2 + (self.head.y - self.food.y) ** 2) ** 0.5
-        if old_distance < new_distance and len(self.snake) < (self.w * self.h // 3 * SnakeGame.BLOCK_SIZE):
-            reward = -1
-
         # 3. check if game over
-        if self._is_collision():
+        if self._is_collision() or self.frame_iteration > 150 * len(self.snake):
             game_over = True
             reward = -16
             return game_over, self.score, reward
 
         # 4. place new food or just move
         if self.head == self.food:
+            self.frame_iteration = 0
             self.score += 1
-            reward = 16
+            reward = +16
             self._place_food()
         else:
             self.snake.pop()
@@ -144,7 +145,9 @@ class SnakeGame:
             pygame.draw.rect(self.display, SnakeGame.BLUE2, pygame.Rect(pt.x + 4, pt.y + 4, 12, 12))
 
         pygame.draw.rect(
-            self.display, SnakeGame.RED, pygame.Rect(self.food.x, self.food.y, SnakeGame.BLOCK_SIZE, SnakeGame.BLOCK_SIZE)
+            self.display,
+            SnakeGame.RED,
+            pygame.Rect(self.food.x, self.food.y, SnakeGame.BLOCK_SIZE, SnakeGame.BLOCK_SIZE),
         )
 
         text = self.font.render("Score: " + str(self.score), True, SnakeGame.WHITE)
@@ -205,6 +208,11 @@ class SnakeGame:
             dir_u,
             dir_r,
             dir_l,
+            # food in front
+            (dir_d and self.food.y > self.head.y)
+            or (dir_u and self.food.y < self.head.y)
+            or (dir_r and self.food.x > self.head.x)
+            or (dir_l and self.food.x < self.head.x),
             # food on right
             (dir_d and self.food.x > self.head.x)
             or (dir_u and self.food.x < self.head.x)
@@ -220,11 +228,6 @@ class SnakeGame:
             or (dir_u and self.food.y > self.head.y)
             or (dir_r and self.food.x < self.head.x)
             or (dir_l and self.food.x > self.head.x),
-            # food in front
-            (dir_d and self.food.y > self.head.y)
-            or (dir_u and self.food.y < self.head.y)
-            or (dir_r and self.food.x > self.head.x)
-            or (dir_l and self.food.x < self.head.x),
         ]
 
         return state
