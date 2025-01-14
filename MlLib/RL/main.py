@@ -1,3 +1,4 @@
+import random
 import sys
 
 import pygame
@@ -9,19 +10,21 @@ from helper import plot
 
 pygame.init()
 
-WIDTH = 640  # Must be divisible by 20
-HEIGHT = 480  # Must be divisible by 20
+WIDTH = 640  # Must be divisible by 40
+HEIGHT = 480  # Must be divisible by 40
 display = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Snake")
 
 clock = pygame.time.Clock()
 font = pygame.font.SysFont("arial", 25)
 
+
 if __name__ == "__main__":
-    agent = Agent()
+    agent = Agent(epsilon=0.8)
     game = SnakeGame(WIDTH, HEIGHT, display, clock, font)
     scores = []
     mean_scores = []
+    target_update = 30
 
     # game loop
     while True:
@@ -35,24 +38,20 @@ if __name__ == "__main__":
 
         state = game.get_state()
 
-        action = agent.get_action(state)  # model prediction
+        action = agent.get_action(state)
 
-        action = list(action)
-
-        game_over, score, reward = game.play_step(action)
+        game_over, score, reward = game.play_step(list(action))
 
         new_state = game.get_state()
 
-        # train model
-        agent.update_short_term_memory(state, action, reward, new_state, game_over)
-
         agent.update_memory(state, action, reward, new_state, game_over)
+
+        agent.train()
 
         if game_over:
             agent.n_games += 1
             scores.append(score)
             mean_scores.append(np.mean(scores))
-            agent.update_long_term_memory()
             if score > agent.record:
                 agent.record = score
                 agent.model.save()
@@ -61,3 +60,7 @@ if __name__ == "__main__":
             print(f"Game {agent.n_games}, Score: {score}, Record {agent.record}, Mean {np.mean(mean_scores)}")
 
             plot(scores, mean_scores)
+
+        if agent.n_games % target_update == 0:
+            agent.lr *= random.uniform(0.9, 1.1)
+            agent.update_target_model()

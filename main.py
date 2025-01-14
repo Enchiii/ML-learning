@@ -4,8 +4,9 @@ from sklearn.datasets import make_moons
 from MlLib.layers import Dense, ReLU, Sigmoid, Softmax
 from MlLib.losses import BinaryCrossEntropy, CategoricalCrossEntropy
 import cupy as cp
-from MlLib.models import Model
+from MlLib.models.model import Model
 from MlLib.metrics import Metrics
+from MlLib.optimizers import SGD
 
 
 if __name__ == "__main__":
@@ -20,12 +21,12 @@ if __name__ == "__main__":
 
     # %%
     model = Model(
-        [Dense(2, 64, activation=ReLU()), Dense(64, 2, activation=Sigmoid())],
+        [Dense(2, 64), ReLU(), Dense(64, 2), Softmax()],
         loss=CategoricalCrossEntropy(),
-        learning_rate=0.1,
+        optimizer=SGD(),
     )
 
-    loss = model.fit(X, y_one_hot, epochs=10, verbose=2)
+    loss = model.fit(X, y_one_hot, epochs=100, verbose=2)
 
     # %%
     pred_probs = model.predict(X)
@@ -33,4 +34,4 @@ if __name__ == "__main__":
 
     metrics = Metrics()
     metrics(y.get(), preds.get())
-    print(metrics.accuracy)
+    print("Accuracy ", metrics.accuracy)

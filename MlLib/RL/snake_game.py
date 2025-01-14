@@ -2,7 +2,6 @@ import random
 from collections import namedtuple, deque
 from enum import Enum
 
-import numpy as np
 import pygame
 
 
@@ -23,7 +22,7 @@ class SnakeGame:
     BLUE2 = (0, 100, 255)
     BLACK = (0, 0, 0)
 
-    SPEED = 100
+    SPEED = 120
 
     BLOCK_SIZE = 20
 
@@ -62,8 +61,8 @@ class SnakeGame:
         self.score = 0
         self.food = None
         self._place_food()
-        self.move_history_len = self.w // SnakeGame.BLOCK_SIZE if self.w > self.h else self.h // SnakeGame.BLOCK_SIZE
-        self.move_history = deque(maxlen=self.move_history_len)
+        # self.move_history_len = self.w // SnakeGame.BLOCK_SIZE if self.w > self.h else self.h // SnakeGame.BLOCK_SIZE
+        # self.move_history = deque(maxlen=self.move_history_len)
 
     def _place_food(self):
         x = random.randint(0, (self.w - SnakeGame.BLOCK_SIZE) // SnakeGame.BLOCK_SIZE) * SnakeGame.BLOCK_SIZE
@@ -74,8 +73,11 @@ class SnakeGame:
 
     def play_step(self, action):
         self.frame_iteration += 1
-        reward = -1
+        reward = 0
         game_over = False
+
+        if self.frame_iteration > 100 * len(self.snake):
+            reward = -8
 
         # 1. collect user input
         for event in pygame.event.get():
@@ -103,7 +105,7 @@ class SnakeGame:
         self.snake.insert(0, self.head)
 
         # 3. check if game over
-        if self._is_collision() or self.frame_iteration > 150 * len(self.snake):
+        if self._is_collision():
             game_over = True
             reward = -16
             return game_over, self.score, reward
@@ -169,13 +171,6 @@ class SnakeGame:
         self.head = SnakeGame.Point(x, y)
 
     def get_state(self):
-        """
-        return state (array): [
-        danger_straight, danger_left, danger_right,
-        direction_down, direction_up, direction_right, direction_left
-        food_left, food_in_front, food_right, food_behind,
-        ]
-        """
         head = self.head
         point_l = SnakeGame.Point(head.x - 20, head.y)
         point_r = SnakeGame.Point(head.x + 20, head.y)
@@ -203,11 +198,6 @@ class SnakeGame:
             or (dir_u and self._is_collision(point_l))
             or (dir_r and self._is_collision(point_u))
             or (dir_l and self._is_collision(point_d)),
-            # snake direction
-            dir_d,
-            dir_u,
-            dir_r,
-            dir_l,
             # food in front
             (dir_d and self.food.y > self.head.y)
             or (dir_u and self.food.y < self.head.y)
@@ -228,6 +218,11 @@ class SnakeGame:
             or (dir_u and self.food.y > self.head.y)
             or (dir_r and self.food.x < self.head.x)
             or (dir_l and self.food.x > self.head.x),
+            # snake direction
+            dir_d,
+            dir_u,
+            dir_r,
+            dir_l,
         ]
 
         return state

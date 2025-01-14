@@ -21,6 +21,12 @@ class Loss:
         if verbose:
             self.info()
 
+    def forward(self, y_true, y_pred):
+        pass
+
+    def backward(self, y_true: cp.ndarray, dvalues: cp.ndarray) -> cp.ndarray:
+        pass
+
 
 class MSE(Loss):
     count = 0
@@ -98,21 +104,30 @@ class CategoricalCrossEntropy(Loss):
 
         return cp.mean(self.forward(y_true, y_pred))
 
-    # zastanaiam sie czy ten call moze psuc
-
     def forward(self, y_true: cp.ndarray, y_pred: cp.ndarray) -> cp.ndarray:
         y_pred_clipped = cp.clip(y_pred, 1e-7, 1 - 1e-7)
         correct_confidences = cp.sum(y_pred_clipped * y_true, axis=1)
         return -cp.log(correct_confidences)
 
     def backward(self, y_true: cp.ndarray, dvalues: cp.ndarray) -> cp.ndarray:
-        samples = dvalues.shape[0]
-        self.dinputs = -y_true / dvalues
+        # samples = dvalues.shape[0]
+        # self.dinputs = -y_true / dvalues
+        # # Normalize gradient
+        # self.dinputs = self.dinputs / samples
+        # return self.dinputs
+        # Number of samples
+        samples = len(dvalues)
+        # If labels are one-hot encoded,
+        # turn them into discrete values
+        if len(y_true.shape) == 2:
+            y_true = cp.argmax(y_true, axis=1)
+        # Copy so we can safely modify
+        self.dinputs = dvalues.copy()
+        # Calculate gradient
+        self.dinputs[range(samples), y_true] -= 1
         # Normalize gradient
         self.dinputs = self.dinputs / samples
         return self.dinputs
-
-
 
 
 class BinaryCrossEntropy(Loss):
